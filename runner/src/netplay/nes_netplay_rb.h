@@ -54,6 +54,8 @@ int  nes_netplay_rb_draining(void);
 int  nes_netplay_rb_quiesced(void);
 void nes_netplay_rb_request_quiesce(void);
 void nes_netplay_rb_log_summary(void);
+/* One tick's host cost (admit -> end of the frame's work, excluding pacing). */
+void nes_netplay_rb_note_tick_cost(int replay, double us);
 
 #ifdef __cplusplus
 }

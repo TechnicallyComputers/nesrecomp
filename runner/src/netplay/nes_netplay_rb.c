@@ -493,6 +493,37 @@ void nes_netplay_rb_finish_frame(void)
     rnet_rb_driver_finish_frame(g_rb.drv);
 }
 
+/* ── tick cost (NETPLAY_FIELDS) ─────────────────────────────────────────── */
+
+#define RB_COST_N 8192
+static float s_cost[2][RB_COST_N];
+static uint64_t s_cost_n[2];
+
+void nes_netplay_rb_note_tick_cost(int replay, double us)
+{
+    int k = replay ? 1 : 0;
+    s_cost[k][s_cost_n[k] % RB_COST_N] = (float)us;
+    s_cost_n[k]++;
+}
+
+static int rb_cmpf(const void *a, const void *b)
+{
+    float x = *(const float *)a, y = *(const float *)b;
+    return (x > y) - (x < y);
+}
+
+static void rb_cost_pct(int k, unsigned *p50, unsigned *p99)
+{
+    static float tmp[RB_COST_N];
+    size_t n = s_cost_n[k] < RB_COST_N ? (size_t)s_cost_n[k] : RB_COST_N;
+    *p50 = *p99 = 0;
+    if (!n) return;
+    memcpy(tmp, s_cost[k], n * sizeof(float));
+    qsort(tmp, n, sizeof(float), rb_cmpf);
+    *p50 = (unsigned)tmp[(n - 1) / 2];
+    *p99 = (unsigned)tmp[(size_t)((double)(n - 1) * 0.99)];
+}
+
 /* ── diagnostics ───────────────────────────────────────────────────────── */
 
 void nes_netplay_rb_set_identity(uint32_t build_fp, uint32_t content_fp)
@@ -541,6 +572,15 @@ void nes_netplay_rb_log_summary(void)
             (unsigned)g_rb.replays_changed, (unsigned)g_rb.replays_same,
             (unsigned)rnet_rb_driver_confirmed_through(g_rb.drv),
             (unsigned)rnet_rb_driver_rtt_estimate_ms(g_rb.drv));
+    {
+        unsigned l50, l99, r50, r99;
+        rb_cost_pct(0, &l50, &l99);
+        rb_cost_pct(1, &r50, &r99);
+        fprintf(stderr, "NETPLAY_FIELDS live=%llu live_us p50=%u p99=%u replay=%llu "
+                        "replay_us p50=%u p99=%u\n",
+                (unsigned long long)s_cost_n[0], l50, l99,
+                (unsigned long long)s_cost_n[1], r50, r99);
+    }
     nes_rb_state_log_timing("netplay");
     nes_rb_log_bridge();
 }

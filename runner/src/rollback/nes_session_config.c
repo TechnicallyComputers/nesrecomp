@@ -16,6 +16,7 @@
 
 typedef struct {
     char key[32];
+    NesSessionGetFn offer;
     NesSessionGetFn get;
     NesSessionApplyFn apply;
     NesSessionRestoreFn restore;
@@ -24,6 +25,30 @@ typedef struct {
 
 static SessionKey s_keys[NES_SESSION_MAX_KEYS];
 static int s_key_count;
+static NesSessionFinalizeFn s_finalize;
+
+void nes_netplay_session_set_finalize(NesSessionFinalizeFn fn) { s_finalize = fn; }
+
+int nes_netplay_session_set_offer(const char *key, NesSessionGetFn offer)
+{
+    int i;
+    for (i = 0; i < s_key_count; ++i)
+        if (!strcmp(s_keys[i].key, key)) { s_keys[i].offer = offer; return 1; }
+    return 0;
+}
+
+int nes_netplay_session_describe_offer(char *out, int cap)
+{
+    int n, i;
+    if (!out || cap <= 0) return 0;
+    n = snprintf(out, (size_t)cap, "%s", NES_SESSION_HEADER);
+    for (i = 0; i < s_key_count && n < cap; ++i) {
+        char v[96] = "";
+        (s_keys[i].offer ? s_keys[i].offer : s_keys[i].get)(v, (int)sizeof(v));
+        n += snprintf(out + n, (size_t)(cap - n), "%s=%s\n", s_keys[i].key, v);
+    }
+    return n;
+}
 
 int nes_netplay_session_register(const char *key, NesSessionGetFn get,
                                  NesSessionApplyFn apply,
@@ -108,6 +133,9 @@ int nes_netplay_session_apply(const char *text, char *why, int why_cap)
             if (why) snprintf(why, (size_t)why_cap, "host did not settle '%s'", s_keys[i].key);
             return 0;
         }
+    /* Cross-key rules (a game's exclusions) run once every key is in, so the
+     * result is a function of the text alone, identical on every peer. */
+    if (s_finalize) s_finalize();
     return 1;
 }
 

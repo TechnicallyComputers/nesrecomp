@@ -224,9 +224,17 @@ int nes_netplay_start(const NesNetplayConfig *cfg)
     /* The session configuration image: the host's when one was handed in
      * (lobby caps or NES_NET_SESSION_CONFIG), else this peer's own settings.
      * Applied on every peer BEFORE boot, never persisted. */
-    if (cfg->session_config[0]) {
-        char why[160];
-        if (!nes_netplay_session_apply(cfg->session_config, why, (int)sizeof(why))) {
+    {
+        char why[160], offer[512];
+        const char *text = cfg->session_config;
+        if (!text[0]) {
+            /* No image handed in (the host of an env-driven match, or a LAN
+             * room, which carries no caps): run this peer's own offer; the
+             * mod-set handshake refuses the match if the peers differ. */
+            nes_netplay_session_describe_offer(offer, (int)sizeof(offer));
+            text = offer;
+        }
+        if (!nes_netplay_session_apply(text, why, (int)sizeof(why))) {
             fprintf(stderr, "nes_netplay: cannot apply the host's session "
                             "configuration (%s) — refusing to start\n", why);
             np_set_error("session_config_refused");

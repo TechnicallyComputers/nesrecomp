@@ -60,6 +60,7 @@ uint8_t nes_input_seat(int seat) {
 #ifdef NESRECOMP_NET
 #include "nes_netplay.h"
 #include "nes_netplay_identity.h"
+#include "nes_netplay_rb.h"
 #endif
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -241,6 +242,7 @@ static int     s_rb_tick_replay = 0;     /* this tick is a replay: no present */
 static int     s_rb_rows_valid = 0;
 static uint8_t s_rb_rows[4];
 static int     s_rb_resim_audio_mark = -1;
+static Uint64  s_rb_tick_t0 = 0;        /* admit time of the running tick */
 static uint8_t s_rb_local_test_pad(void);
 
 #ifdef NESRECOMP_NET
@@ -325,7 +327,7 @@ static void rb_netplay_gate(void) {
         }
         nes_netplay_stage_local(rb_sample_local_pad());
         a = nes_netplay_poll_admit();
-        if (a != NES_NETPLAY_ADMIT_STALL) break;
+        if (a != NES_NETPLAY_ADMIT_STALL) { s_rb_tick_t0 = SDL_GetPerformanceCounter(); break; }
         SDL_Delay(1);
     }
 }
@@ -334,6 +336,11 @@ static void rb_netplay_gate(void) {
  * each peer's own preference comes back when the session ends. */
 static int s_ws_offline = -1;
 static int ws_get(char *out, int cap) { return snprintf(out, (size_t)cap, "%d", g_nes_config.widescreen ? 1 : 0); }
+static int ws_offer(char *out, int cap) {
+    /* The player's own setting, not a previous match's applied value. */
+    int v = s_ws_offline >= 0 ? s_ws_offline : g_nes_config.widescreen;
+    return snprintf(out, (size_t)cap, "%d", v ? 1 : 0);
+}
 static int ws_apply(const char *v) {
     if (!v || (strcmp(v, "0") && strcmp(v, "1"))) return 0;
     if (s_ws_offline < 0) s_ws_offline = g_nes_config.widescreen;
@@ -1966,6 +1973,14 @@ smoke_skip_input:
      * next one has not started rendering. */
     video_apply_pending();
 
+#ifdef NESRECOMP_NET
+    if (s_rb_tick_t0 && nes_netplay_active()) {
+        nes_netplay_rb_note_tick_cost(s_rb_tick_replay,
+            (double)(SDL_GetPerformanceCounter() - s_rb_tick_t0) * 1e6 /
+            (double)SDL_GetPerformanceFrequency());
+        s_rb_tick_t0 = 0;
+    }
+#endif
     if (!s_rb_tick_replay) pace_ntsc_frame();
     finish_frame_callback();
 }
@@ -2117,9 +2132,11 @@ int nesrecomp_runner_run(int argc, char *argv[]) {
 #ifdef NESRECOMP_NET
     int net_on = 0;
     (void)nes_netplay_session_register("widescreen", ws_get, ws_apply, ws_restore);
+    (void)nes_netplay_session_set_offer("widescreen", ws_offer);
     {
         NesNetplayConfig net;
-        if (!nes_netplay_take_pending_config(&net)) nes_netplay_config_defaults(&net);
+        int from_lobby = nes_netplay_take_pending_config(&net);
+        if (!from_lobby) nes_netplay_config_defaults(&net);
         nes_netplay_config_apply_env(&net);
         if (net.enabled) {
             /* Refuse, before connecting, what an online session cannot
@@ -2138,11 +2155,21 @@ int nesrecomp_runner_run(int argc, char *argv[]) {
             if (refuse) {
                 fprintf(stderr, "[Netplay] %s requires local play — refusing the "
                                 "online session before connecting.\n", refuse);
+                /* A lobby launch goes back to the room (nonzero return); an
+                 * environment-driven launch has no room to go back to. */
+                if (!from_lobby || getenv("NES_NET_EXIT_ON_RETURN")) {
+                    nesrecomp_expect_process_exit();
+                    exit(1);
+                }
                 return 1;
             }
             if (nes_netplay_start(&net) != 0) {
                 fprintf(stderr, "[Netplay] Could not start the requested session (%s).\n",
                         nes_netplay_last_error());
+                if (!from_lobby || getenv("NES_NET_EXIT_ON_RETURN")) {
+                    nesrecomp_expect_process_exit();
+                    exit(1);
+                }
                 return 1;
             }
             net_on = 1;

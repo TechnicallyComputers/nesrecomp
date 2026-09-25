@@ -2609,6 +2609,23 @@ extern "C" int nes_mod_option_value(
     return 1;
 }
 
+/* Is a feature ENABLED in the player's offline selection (not the committed
+ * plan)? A netplay host reads its session offer from here: the match itself
+ * runs vanilla plus the sealed session configuration, so the committed plan
+ * is empty while the host still has to say what it would play. */
+extern "C" int nes_mod_feature_selected(const char* package_id,
+                                        const char* feature_id) {
+    if (!package_id || !feature_id) return 0;
+    NESRecomp::Runtime& runtime = NESRecomp::state();
+    if (!runtime.initialized) return 0;
+    const NESRecomp::Package* package =
+        NESRecomp::selected_package(runtime, package_id);
+    if (!package) return 0;
+    const NESRecomp::Feature* feature =
+        NESRecomp::find_feature(*package, feature_id);
+    return feature && NESRecomp::feature_enabled(runtime, *package, *feature) ? 1 : 0;
+}
+
 extern "C" const char* nes_mod_external_rom_path(
     const char* package_id, const char* feature_id, const char* resource_id) {
     if (!package_id || !feature_id || !resource_id) return nullptr;

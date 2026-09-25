@@ -22,6 +22,15 @@ typedef void (*NesSessionRestoreFn)(void);                 /* offline value */
 int  nes_netplay_session_register(const char *key, NesSessionGetFn get,
                                   NesSessionApplyFn apply,
                                   NesSessionRestoreFn restore);
+/* What the HOST proposes for a key (e.g. read from the offline mod
+ * selection, since a match itself commits no mods); default = get. */
+int  nes_netplay_session_set_offer(const char *key, NesSessionGetFn offer);
+/* Game rule run after a whole text is applied (e.g. co-op excludes
+ * widescreen). Deterministic: a function of the applied values only. */
+typedef void (*NesSessionFinalizeFn)(void);
+void nes_netplay_session_set_finalize(NesSessionFinalizeFn fn);
+/* The offer text (the host's proposal; what a lobby publishes). */
+int  nes_netplay_session_describe_offer(char *out, int cap);
 /* Canonical text of the CURRENT settings. Returns its length. */
 int  nes_netplay_session_describe(char *out, int cap);
 /* Apply a host text; 0 with *why on an unknown key, a missing key or a

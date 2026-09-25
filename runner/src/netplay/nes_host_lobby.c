@@ -80,7 +80,7 @@ static void fill_caps(void *ctx, const RecompLauncherCSettings *settings,
     const char *body;
     (void)ctx;
     (void)settings;
-    nes_netplay_session_describe(text, (int)sizeof(text));
+    nes_netplay_session_describe_offer(text, (int)sizeof(text));
     nes_netplay_session_to_wire(text, wire, (int)sizeof(wire));
     body = wire;
     if (!strncmp(body, SESSION_HEADER_WIRE, strlen(SESSION_HEADER_WIRE)))

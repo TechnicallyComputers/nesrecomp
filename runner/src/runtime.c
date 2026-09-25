@@ -523,6 +523,7 @@ static int      s_skip_next_boundary_tick = 0;
 /* Monotonic guest CPU-cycle counter (see nes_runtime.h). Advanced by the same
  * _c as s_ops_count, but never reset — the co-sim alignment ruler. */
 uint64_t g_nes_cycles = 0;
+int g_nes_session_locked = 0;
 /* g_nes_cycles sampled at the frame-boundary FIRE (before the NMI handler runs).
  * The co-sim must measure frame length here, not at the post-handler tap: the
  * handler's length varies frame-to-frame, so sampling after it injects that
@@ -1072,6 +1073,14 @@ void runtime_request_guest_resume(uint16_t pc, int tick_charged) {
     s_guest_resume_pc = pc;
     s_guest_resume_tick_charged = tick_charged ? 1 : 0;
     s_guest_resume_pending = 1;
+}
+
+void runtime_rebase_frame_resume(uint16_t pc, int tick_charged) {
+    if (s_frame_callback_depth <= 0)
+        return;
+    s_frame_resume_pc = pc;
+    s_frame_resume_valid = 1;
+    s_frame_resume_tick_charged = tick_charged ? 1 : 0;
 }
 
 int runtime_guest_resume_pending(void) {

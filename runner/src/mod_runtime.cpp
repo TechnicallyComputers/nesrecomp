@@ -2635,6 +2635,31 @@ extern "C" int nes_mod_runtime_commit_c(const char* rom_path) {
         rom_path ? fs::path(rom_path) : fs::path(), &error) ? 1 : 0;
 }
 
+/* Netplay launch: vanilla, WITHOUT touching the persisted offline selection
+ * (recomp-ai-rules/MODS.md §7, NETPLAY.md §4 "mods are cleared, not merged").
+ * The same as the launcher provider's commit_netplay, reachable from a
+ * headless / env-driven launch too. The next ordinary commit rebuilds the
+ * offline plan. What a match MAY vary is its sealed session configuration
+ * (nes_netplay_session_*), applied by the runner, not a mod plan. */
+extern "C" int nes_mod_runtime_commit_netplay_c(const char* rom_path) {
+    NESRecomp::Runtime& runtime = NESRecomp::state();
+    if (rom_path && rom_path[0]) {
+        std::string digest;
+        if (!NESRecomp::crc32_file(rom_path, digest, &runtime.error) ||
+            digest != runtime.rom_crc32) {
+            if (runtime.error.empty())
+                runtime.error =
+                    "The selected ROM does not match this mod catalog target.";
+            return 0;
+        }
+    }
+    runtime.committed = {};
+    runtime.committed_external_rom_paths.clear();
+    runtime.commit_succeeded = false;
+    runtime.error.clear();
+    return 1;
+}
+
 extern "C" void nes_mod_runtime_activate_plugins_c(void) {
     NESRecomp::mod_runtime_activate_plugins();
 }

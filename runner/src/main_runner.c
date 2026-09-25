@@ -1939,6 +1939,16 @@ smoke_skip_input:
             s_framebuf[cy * g_render_width + cx] = 0xFFFFFFFF;
     }
 
+#ifdef NESRECOMP_NET
+    /* A tick's host cost: admit -> the frame's work done, before the present
+     * (which may wait on vsync) and the pacing sleep. */
+    if (s_rb_tick_t0 && nes_netplay_active()) {
+        nes_netplay_rb_note_tick_cost(s_rb_tick_replay,
+            (double)(SDL_GetPerformanceCounter() - s_rb_tick_t0) * 1e6 /
+            (double)SDL_GetPerformanceFrequency());
+        s_rb_tick_t0 = 0;
+    }
+#endif
     /* Upload texture and present.
      * In turbo mode, only present every 16th frame to avoid vsync blocking
      * on every SDL_RenderPresent call (~6ms each on a 165Hz monitor). */
@@ -1973,14 +1983,6 @@ smoke_skip_input:
      * next one has not started rendering. */
     video_apply_pending();
 
-#ifdef NESRECOMP_NET
-    if (s_rb_tick_t0 && nes_netplay_active()) {
-        nes_netplay_rb_note_tick_cost(s_rb_tick_replay,
-            (double)(SDL_GetPerformanceCounter() - s_rb_tick_t0) * 1e6 /
-            (double)SDL_GetPerformanceFrequency());
-        s_rb_tick_t0 = 0;
-    }
-#endif
     if (!s_rb_tick_replay) pace_ntsc_frame();
     finish_frame_callback();
 }

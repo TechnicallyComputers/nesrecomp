@@ -243,6 +243,19 @@ int nes_host_lobby_selftest_role(void)
     return 0;
 }
 
+static int count_members(int spectators)
+{
+    int i, n = 0, m = rnet_lobby_member_count();
+    for (i = 0; i < m; ++i) {
+        RNetLobbyMember mem;
+        if (rnet_lobby_member_get(i, &mem) && (mem.is_spectator ? 1 : 0) == spectators)
+            n++;
+    }
+    return n;
+}
+static int players_seated(void) { return count_members(0); }
+static int spectators_seated(void) { return count_members(1); }
+
 int nes_host_lobby_selftest_room(int round, NesNetplayConfig *cfg)
 {
     const RecompLauncherCNetplayCallbacks *cb = recomp_netplay_host_callbacks();
@@ -257,12 +270,40 @@ int nes_host_lobby_selftest_room(int round, NesNetplayConfig *cfg)
     RecompLauncherCNetplayLaunch launch;
     uint32_t deadline = st_now() + 90000u, next_list = 0;
     int joined = is_host, ready_sent = 0, started = 0;
+    const int spectate = getenv("NES_LOBBY_SELFTEST_SPECTATE") != NULL;
+    const char *ws = getenv("NES_LOBBY_SELFTEST_EXPECT_SPECTATORS");
+    const int want_spectators = ws ? atoi(ws) : 0;
+    uint32_t next_move = 0;
 
     if (!cb || !role) return -1;
     if (!lobby || !lobby[0]) lobby = "nes-selftest";
     memset(&settings, 0, sizeof(settings));
     memset(&launch, 0, sizeof(launch));
-    if (round == 1) {
+    if (round == 1 && getenv("NES_LOBBY_SELFTEST_LAN")) {
+        /* LAN / Direct IP room (recomp-ui's rnet_lan_* modules, no server):
+         * two seats, the delay settled and nothing else. */
+        const char *pe = getenv("NES_LOBBY_SELFTEST_LAN_PORT");
+        int port = pe ? atoi(pe) : 17790, rc = -1;
+        cb->set_player_name(NULL, name && name[0] ? name : (is_host ? "HostTest" : "GuestTest"));
+        if (is_host) {
+            char ep[64];
+            snprintf(ep, sizeof(ep), "127.0.0.1:%d", port);
+            rc = cb->create(NULL, lobby, ep, "", &settings, 1, 2);
+        } else {
+            char gb[64], id[80];
+            snprintf(gb, sizeof(gb), "0.0.0.0:%d", port + 1);
+            snprintf(id, sizeof(id), "lan:127.0.0.1:%d", port);
+            while (st_now() < deadline) {   /* the host may not be listening yet */
+                rc = cb->join(NULL, id, "", gb);
+                if (rc == 0) break;
+                SDL_Delay(250);
+            }
+        }
+        fprintf(stderr, "[lobby-selftest] %s round=1 lan %s rc=%d\n",
+                is_host ? "host" : "guest", is_host ? "create" : "join", rc);
+        if (rc != 0) return -5;
+        joined = 1;
+    } else if (round == 1) {
         cb->set_player_name(NULL, name && name[0] ? name : (is_host ? "HostTest" : "GuestTest"));
         if (url && url[0]) cb->set_lobby_url(NULL, url);
         if (cb->connect(NULL) != 0) {
@@ -276,6 +317,8 @@ int nes_host_lobby_selftest_room(int round, NesNetplayConfig *cfg)
         }
         if (is_host) {
             char ep[64] = "0.0.0.0:7777";
+            if (getenv("NES_LOBBY_SELFTEST_ALLOW_SPECTATORS"))
+                rnet_lobby_set_allow_spectators(1);
             if (cb->create(NULL, lobby, ep, "", &settings, 0, seats) != 0) {
                 fprintf(stderr, "[lobby-selftest] create failed\n");
                 return -5;
@@ -302,12 +345,19 @@ int nes_host_lobby_selftest_room(int round, NesNetplayConfig *cfg)
                 }
             }
         }
-        if (joined && cb->in_lobby(NULL) && !ready_sent &&
-            (!is_host || cb->member_count(NULL) >= seats)) {
+        if (spectate && joined && cb->in_lobby(NULL) && !rnet_lobby_local_is_spectator() &&
+            st_now() >= next_move) {
+            /* Take a gallery seat: simulate the match, contribute nothing. */
+            int g = rnet_lobby_spectator_slot(0);
+            next_move = st_now() + 500u;
+            if (g >= 0) (void)rnet_lobby_seat_move_self(g);
+        }
+        if (!spectate && joined && cb->in_lobby(NULL) && !ready_sent &&
+            (!is_host || players_seated() >= seats)) {
             ready_sent = cb->set_ready(NULL, 1) == 0;
         }
-        if (is_host && ready_sent && !started && cb->member_count(NULL) >= seats &&
-            cb->all_ready(NULL)) {
+        if (is_host && ready_sent && !started && players_seated() >= seats &&
+            spectators_seated() >= want_spectators && cb->all_ready(NULL)) {
             started = cb->request_start(NULL, &settings) == 0;
             fprintf(stderr, "[lobby-selftest] host round=%d start=%d members=%d\n",
                     round, started, cb->member_count(NULL));

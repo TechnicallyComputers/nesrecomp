@@ -71,7 +71,7 @@
 #   RB_LOOPBACK_KILL_AT=N        kill the FOLLOWER N seconds in (disconnect cell)
 #   RB_LOOPBACK_DRAIN_SECS=N     how long the coordinated stop may take (default 30)
 #   RB_LOOPBACK_PORTS=a,b[,c,d]  UDP ports of seat 1, seat 0, seat 2, seat 3
-#                                (default 9700,9701,9702,9703)
+#                                (default: a random base per run)
 #
 # Stopping. At the deadline every peer gets SIGUSR1: the driver DRAINS (no new
 # episode, open ones finish, peers told) and the process exits once idle
@@ -106,8 +106,12 @@ rm -f "$OUT"/initiator.* "$OUT"/follower.* "$OUT"/follower[0-9].*
 # role and port of each seat. Seat 1 is the initiator; the port list is in
 # the order seat 1, seat 0, seat 2, seat 3, so two seats keep 9700/9701.
 role_of() { case "$1" in 1) echo initiator;; 0) echo follower;; *) echo "follower$1";; esac; }
-IFS=, read -r -a PORTL <<<"${RB_LOOPBACK_PORTS:-9700,9701,9702,9703}"
-port_of() { case "$1" in 1) echo "${PORTL[0]}";; 0) echo "${PORTL[1]}";; *) echo "${PORTL[$1]:-$((9700 + $1))}";; esac; }
+# Ports: a per-run random base (20000-59999) unless RB_LOOPBACK_PORTS pins
+# them -- the fixed 9700-9703 collided with another engine's harness running
+# on the same machine (Genesis track, 2026-09-25).
+PB=$(( 20000 + (RANDOM % 10000) * 4 ))
+IFS=, read -r -a PORTL <<<"${RB_LOOPBACK_PORTS:-$PB,$((PB+1)),$((PB+2)),$((PB+3))}"
+port_of() { case "$1" in 1) echo "${PORTL[0]}";; 0) echo "${PORTL[1]}";; *) echo "${PORTL[$1]}";; esac; }
 ROLES=()
 for ((s = 0; s < SEATS; s++)); do ROLES+=("$(role_of $s)"); done
 # initiator first in every table, as before

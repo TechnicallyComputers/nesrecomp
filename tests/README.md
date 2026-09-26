@@ -9,7 +9,13 @@ these self-tests fail at origin/master `1dbe574` and identically on
 `feat/rollback-netplay` -- they are pre-existing, not regressions, and not yet
 root-caused:
 
-- `tests/coop_input`: `FAIL line 60: initial==0`.
+- `tests/coop_input`: `FAIL line 60: initial==0` -- **host-dependent, not
+  deterministic** (corrected later the same day): it failed on both trees in
+  one session and passed 1/1 on both in a later one, same binary and
+  keybinds.ini. The machine had a physical DualSense attached (the runner logs
+  "Device 1 connected: DualSense"), and the test reads live SDL devices; the
+  cause is not established. Treat a failure as INCONCLUSIVE on a machine with
+  pads attached, not as a regression.
 - `tests/runtime_boundary`: `test_ppumask_preserves_native_bits: Assertion
   'g_ppumask == (uint8_t)mask' failed`.
 

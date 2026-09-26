@@ -15,7 +15,7 @@
 
 | where | what |
 |---|---|
-| `lib/recomp-net` bdc58b6 | the driver, LAN transport + hub, lobby client, link simulator (RetroPortingToolKit `feat/nes-spectator` = `feat/rb-sparse-seats-and-ws-backlog` 03ee1b1 [main a9d20e2 + sparse-seat seal fix + WS backlog] + the observer fix, §5) |
+| `lib/recomp-net` 588059c | the driver, LAN transport + hub, lobby client, link simulator (RetroPortingToolKit `feat/genesis-spectator-ready` = bdc58b6 + the gallery no longer re-arms ready on every lobby_update; bdc58b6 is `feat/nes-spectator` = `feat/rb-sparse-seats-and-ws-backlog` 03ee1b1 [main a9d20e2 + sparse-seat seal fix + WS backlog] + the observer fix, §5) |
 | `lib/retcomm-rbengine` 2a03e73 | the snapshot ring and the monotonic clock |
 | `runner/src/savestate.c` | ONE in-memory serializer; the V7 file is exactly its byte stream |
 | `runner/src/rollback/nes_rb_state.c` | the rollback snapshot (V7 image + logical-input trailer) and the per-tick digest over the same bytes |

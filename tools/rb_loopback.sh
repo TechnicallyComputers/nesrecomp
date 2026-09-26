@@ -142,6 +142,12 @@ follower_off=(NES_RB_FORCE_MISPREDICT=0
               NES_RB_FORCE_MOD_MISMATCH=0
               NES_RB_FORCE_MODSET=)
 
+# SCREENSHOTS. <role>.png is the frame of the CONFIRMED tick SHOT_TICK (every
+# peer, same tick, rewritten by each replay of it): compare these. <role>.final.png
+# is whatever that peer last rendered when it drained and exited -- each peer
+# stops at its own sim tick (they differ by a few ticks), so final.png images
+# are NOT tick-aligned and differ across peers by design; they are NOT
+# evidence of divergence. <role>.shot.state is the snapshot image at SHOT_TICK.
 # Every peer gets its own directory with a copy of the executable and the
 # mods/ it stages beside itself, so config.ini, keybinds.ini, saves/ and the
 # LAN registry are per machine, as they would be.
@@ -181,7 +187,7 @@ for ((s = 0; s < SEATS; s++)); do
     (cd "$OUT/$role" && exec env "${common[@]}" NES_NET_SLOT=$s NES_NET_BIND=$bind \
         NES_NET_PEER="$peer" NES_NET_EXIT_ON_RETURN=1 \
         NES_NET_SHOT_TICK="$SHOT_TICK" NES_NET_SHOT_PATH="$OUT/$role.png" \
-        NES_NET_SCREENSHOT="$OUT/$role.final.png" \
+        NES_NET_SCREENSHOT="$OUT/$role.final.png" NES_NET_SHOT_STATE="$OUT/$role.shot.state" \
         "${knobs[@]}" "$exe" "$ROM" "${EXTRA[@]}") >"$OUT/$role.log" 2>&1 &
     PID[$role]=$!
 done

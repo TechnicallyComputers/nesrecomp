@@ -159,6 +159,7 @@ for ((i = 0; i < SEATS + SPECT; i++)); do
     (cd "$OUT/$role" && exec env "${common[@]}" "${knobs[@]}" \
         NES_LOBBY_SELFTEST="$sel" NES_LOBBY_SELFTEST_NAME="$role" \
         NES_NET_TEST_PAD="$i" NES_NET_SHOT_PATH="$OUT/$role.png" \
+        NES_NET_SHOT_STATE="$OUT/$role.shot.state" \
         NES_RUN_SCREENSHOT="$OUT/$role.offline.png" \
         "./$(basename "$EXE")" "$ROM" "${EXTRA[@]}") >"$OUT/$role.log" 2>&1 &
     PID[$role]=$!

@@ -138,6 +138,15 @@ executable. See each script's header.
 
 ## 5. Capability matrix
 
+**Which screenshots compare.** `<role>.png` (rb_loopback / rb_lobby) is the
+frame of one CONFIRMED tick (`NES_NET_SHOT_TICK`), rewritten by every replay
+of it: those are equal across peers and are the evidence. `<role>.final.png`
+is whatever a peer last rendered when it drained and exited; peers stop a few
+ticks apart, so the final images are NOT tick-aligned and differ across peers
+by design (e.g. sweep/4_seats_co_op_: initiator.final vs followers) -- they
+are not divergence. `<role>.shot.state` is the snapshot image at the shot tick
+(u32 length + V7 save-state; strip 4 bytes for a .sav).
+
 Status legend as in the N64 import matrix: **measured** = a run exercised it
 and counted it above zero; **bound** = wired, exercised indirectly;
 **partial** / **open** = see the note; **n/a** = no analog. Runs: Linux,
@@ -162,7 +171,7 @@ dirs, sram-sync/; executables pruned).
 | boot-digest gate | measured | `NES_RB_FORCE_BOOT_FORK=1`: both peers `BOOT DIGEST MISMATCH`, refused `boot_digest_mismatch` at sim=1, 0 episodes; online lobby: both soft-return with `last_error="boot_digest_mismatch"` |
 | rematch cold reset | measured | online 2 rounds (evidence/lobby-online-2p): sessions 2 then 3 (fresh), boot parts identical, both drained and back in the room; offline Play after the rematch `RUN_DONE frames=900 state=7361e53c fb_crc=d77c70bd` == a fresh process. Two carriers found and fixed: the lazy dot-clock init and a pending guest-resume request surviving `runtime_session_reset` |
 | FRAME_COMMIT chain | advisory | as on SNES/N64; 0 chain stalls outside STRESS |
-| N seats | measured | 3 seats 0 ms (336 ep), 200 ms (72), 2% loss (105); 4 seats 0 ms (656), 200 ms (358), 2% loss (624), organic 300 ms (157): 0 forks, ledger exact per pair, all drained, confirmed-frame digest + PNG identical on every peer |
+| N seats | measured | 3 seats 0 ms (336 ep), 200 ms (72), 2% loss (105); 4 seats 0 ms (656), 200 ms (358), 2% loss (624), organic 300 ms (157): 0 forks, ledger exact per pair, all drained, confirmed-frame digest + PNG identical on every peer. Screenshots: the frame showing all four characters is the confirmed tick 330 of a 4-seat run (evidence/loopback-4seat-tick330/*.png, identical on every peer). evidence/lobby-online-4p-spect/host.png (confirmed tick 900) shows three: its snapshot (host.shot.state, read with tests/coop_runtime.State) has Mario `life=1` (DYING, at a Goomba, screen x 227) and Luigi, Wario, Waluigi alive at screen x 220 / 9 / 235 -- all four on screen, one mid-death |
 | replay ownership | incremental | INCREMENTAL, one replayed tick per outer callback; continuation restarted every tick (§2). Host cost per tick measured admit -> end of the frame's work, before present/vsync and pacing: live 0.8-1.0 ms p50 / 1.3-1.7 p99, replay 0.7-0.9 ms p50 / 0.8-2.5 p99 across the 19 cells (the first sweep's 9-16 ms live p50 included the vsync wait and is superseded) |
 | **Engine** | | |
 | snapshot fast path | measured | 167,018 B image (SMB incl. mod records): save 0.007 ms p50 / 0.014 p99, load 0.037-0.043 ms p50 / 0.058-0.068 p99 |
@@ -176,7 +185,7 @@ dirs, sram-sync/; executables pruned).
 | recomp-ui lobby | measured | online create/join/launch/rematch (lobby-online-2p) and forced-fork soft return (lobby-bootfork); 4 players + 1 spectator x 2 rounds (lobby-online-4p-spect); **LAN rematch: 2 runs x 2 matches PASS, fresh host-allocated ids per START (135361498 -> 135361499, 810949062 -> 810949063), 0 forks** (lobby-lan-1/2) after the recomp-ui fix (§6); launcher screens NOT seen on a display |
 | harness | measured | `rb_loopback.sh` 2-4 seats (fresh session id per run), `rb_sweep.sh` pre-flight + 19 cells SWEEP PASS (twice; latest in evidence/), `rb_lobby.sh` online/LAN/spectators/forced fork/offline-after |
 | host-authoritative SRAM + sandbox | n/a for SMB; path measured | SMB has no battery (the barrier is skipped, `sram=none`). Forced with `NES_NET_SRAM_SYNC=1` (evidence/sram-sync): host sends 8192 B over RNET_STATE_OP_SRAM before boot, guest applies it and passes the barrier in 1-13 ms, 4/4 matches PASS. The run found a defect (the host never FINISHED the transfer, so it stopped sending input and both peers hit 'peer gone') -- fixed. Guest sandbox `saves/netplay/` is wired; no battery title has exercised it |
-| spectators | measured | 4 seats + 1 spectator through the relay, 2 rounds (evidence/lobby-online-4p-spect): spectator launches `spectator=1`, LOCKSTEP pinned (observer), 0 invents, 0 episodes, ignores the players' 158 BEGINs, 0 forks, keeps up (sim 1208 vs host 1203), same confirmed digest at tick 900 as all four players, drained and back in the room after both matches. Fixed in recomp-net (bdc58b6, `rb_driver_test 4seat-observer-rtt60`, which fails on 03ee1b1) |
+| spectators | measured | 4 seats + 1 spectator through the relay, 2 rounds (evidence/lobby-online-4p-spect): spectator launches `spectator=1`, LOCKSTEP pinned (observer), 0 invents, 0 episodes, ignores the players' 158 BEGINs, 0 forks, keeps up (sim 1207-1208 vs host 1204), same confirmed digest at tick 900 as all four players (2243ca7f), drained and back in the room after both matches. Fixed in recomp-net (bdc58b6, `rb_driver_test 4seat-observer-rtt60`, which fails on 03ee1b1) |
 | ICE / internet | not built | refused (`ice_not_built`); online = lobby server UDP relay |
 
 ## 6. Open defects and decisions

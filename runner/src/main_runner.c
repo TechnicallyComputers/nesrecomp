@@ -1890,8 +1890,24 @@ smoke_skip_input:
             shot_path = getenv("NES_NET_SHOT_PATH");
             shot = (e && e[0] && shot_path && shot_path[0]) ? atol(e) : -1;
         }
-        if (shot >= 0 && (long)nes_netplay_current_tick() == shot)
+        if (shot >= 0 && (long)nes_netplay_current_tick() == shot) {
             runner_screenshot(shot_path);
+            /* NES_NET_SHOT_STATE=<file>: the snapshot image of the same
+             * confirmed tick (u32 length + V7 save-state + trailer; strip the
+             * first 4 bytes for a .sav), for reading game state behind a
+             * screenshot. Rewritten by every replay of the tick. */
+            {
+                const char *sp = getenv("NES_NET_SHOT_STATE");
+                if (sp && sp[0]) {
+                    size_t n = 0;
+                    const uint8_t *img;
+                    nes_rb_state_invalidate();
+                    img = nes_rb_state_image(&n);
+                    FILE *f = img ? fopen(sp, "wb") : NULL;
+                    if (f) { fwrite(img, 1, n, f); fclose(f); }
+                }
+            }
+        }
     }
 #endif
     /* Auto-screenshot disabled — use F8 or input scripts for screenshots */

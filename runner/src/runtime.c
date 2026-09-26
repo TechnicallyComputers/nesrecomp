@@ -3598,6 +3598,13 @@ void runtime_session_reset(void) {
      * must redo it exactly as a fresh process does (NETPLAY.md §3). */
     s_odd_frame=0;s_dot_debt=0;s_frame_budget=OPS_PER_FRAME;s_vblank_pending=0;
     s_dotclock=-1;
+    /* Host continuation state from the previous machine: a guest-resume
+     * request left pending by a netplay tick restart (or a load) must not
+     * be taken by the next cold boot's run_guest_execution -- measured: the
+     * offline Play after a rematch resumed $8057 on zeroed RAM and hung. */
+    s_guest_resume_pending=0;s_guest_resume_pc=0;s_guest_resume_tick_charged=0;
+    s_skip_next_boundary_tick=0;s_frame_callback_depth=0;s_frame_resume_valid=0;
+    s_guest_pc=0;s_guest_pc_valid=0;s_guest_tick_charged=0;s_unclocked_depth=0;
     s_in_irq=0;s_saved_vblank_depth=0;s_open_bus=0;s_ppu_io_latch=0;
     s_tail_pending=-1;s_tail_caller=-1;s_tail_active_n=0;s_tail_pending_slot=-1;
     s_last_sync_sx=s_last_sync_sy=0;s_last_sync_t=0;s_last_sync_frame=0;

@@ -83,7 +83,7 @@ case "$SEATS" in 2|3|4) ;; *) echo "rb_lobby: RB_LOBBY_SEATS=$SEATS (2..4)" >&2;
 EXE=$(cd "$(dirname "$EXE")" && pwd)/$(basename "$EXE")
 ROM=$(cd "$(dirname "$ROM")" && pwd)/$(basename "$ROM")
 mkdir -p "$OUT"; OUT=$(cd "$OUT" && pwd)
-rm -rf "$OUT"/host "$OUT"/guest* "$OUT"/server "$OUT"/*.log "$OUT"/*.png
+rm -rf "$OUT"/host "$OUT"/guest* "$OUT"/spect* "$OUT"/fresh "$OUT"/server "$OUT"/*.log "$OUT"/*.png
 IFS=, read -r WS_PORT RELAY_PORT <<<"${RB_LOBBY_PORTS:-18865,18877}"
 MISPREDICT="${RB_LOBBY_MISPREDICT:-45}"
 WALL="${RB_LOBBY_WALL:-$(( 90 + 45 * ROUNDS + TICKS * ROUNDS / 40 ))}"
@@ -135,6 +135,8 @@ if [ "$MODE" = online ]; then
         (exec 3<>/dev/tcp/127.0.0.1/$WS_PORT) 2>/dev/null && break
         sleep 0.1
     done
+    sleep 0.3
+    kill -0 "$server_pid" 2>/dev/null || { echo "rb_lobby: the server exited (port $WS_PORT in use?) — $OUT/server.log" >&2; exit 2; }
     common+=(RNET_LOBBY_URL=ws://127.0.0.1:$WS_PORT)
 else
     common+=(NES_LOBBY_SELFTEST_LAN=1 NES_LOBBY_SELFTEST_LAN_PORT="${RB_LOBBY_LAN_PORT:-17790}")
@@ -175,8 +177,8 @@ while :; do
     fi
     sleep 0.5
 done
-wait 2>/dev/null
-[ -n "$server_pid" ] && kill "$server_pid" 2>/dev/null
+for r in "${ROLES[@]}"; do wait "${PID[$r]}" 2>/dev/null; done
+[ -n "$server_pid" ] && { kill "$server_pid" 2>/dev/null; wait "$server_pid" 2>/dev/null; }
 
 count() { grep -c "$2" "$OUT/$1.log" 2>/dev/null || true; }
 rc=0

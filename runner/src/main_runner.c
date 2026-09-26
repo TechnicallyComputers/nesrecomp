@@ -375,6 +375,16 @@ static int rb_restart_every_tick(void) {
     return nes_rb_probe_active();
 }
 
+#ifdef NESRECOMP_NET
+/* The engine's session keys. Called by the runner and by the lobby before
+ * the room publishes its caps (the room's text must already carry every key
+ * a peer will require). Idempotent. */
+void nes_runner_register_session_keys(void) {
+    (void)nes_netplay_session_register("widescreen", ws_get, ws_apply, ws_restore);
+    (void)nes_netplay_session_set_offer("widescreen", ws_offer);
+}
+#endif
+
 static void rb_frame_top(void) {
 #ifdef NESRECOMP_NET
     if (nes_netplay_active()) { rb_netplay_gate(); return; }
@@ -2133,8 +2143,7 @@ int nesrecomp_runner_run(int argc, char *argv[]) {
     nes_rb_probe_init();
 #ifdef NESRECOMP_NET
     int net_on = 0;
-    (void)nes_netplay_session_register("widescreen", ws_get, ws_apply, ws_restore);
-    (void)nes_netplay_session_set_offer("widescreen", ws_offer);
+    nes_runner_register_session_keys();
     {
         NesNetplayConfig net;
         int from_lobby = nes_netplay_take_pending_config(&net);

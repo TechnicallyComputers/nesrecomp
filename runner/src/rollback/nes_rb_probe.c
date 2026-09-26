@@ -40,7 +40,7 @@ void nes_rb_log_bridge(void);   /* main_runner.c */
 
 #define PROBE_MAX_SPAN 240
 
-enum { P_OFF = 0, P_IDLE, P_RUN1, P_RUN2, P_DIGEST_ONLY };
+enum { P_OFF = 0, P_IDLE, P_RUN1, P_RUN2, P_DIGEST_ONLY, P_MUTATION };
 
 static struct {
     int mode;
@@ -82,6 +82,12 @@ void nes_rb_probe_init(void)
     if (!e || !e[0]) return;
     if (!strcmp(e, "digest")) {
         P.mode = P_DIGEST_ONLY;
+    } else if (!strncmp(e, "mutation", 8)) {
+        /* NES_RB_PROBE=mutation[:tick]: flip one byte in each partition's
+         * state, prove the digest names that partition and nothing else,
+         * restore it, prove the digest returns. */
+        P.mode = P_MUTATION;
+        P.start = (e[8] == ':') ? (uint32_t)atoi(e + 9) : 200u;
     } else {
         unsigned a = 0, b = 0, c = 0, d = 0;
         int n = sscanf(e, "%u:%u:%u:%u", &a, &b, &c, &d);
@@ -127,6 +133,42 @@ void nes_rb_probe_top(void)
 {
     if (P.mode == P_OFF) return;
     P.tick++;
+    if (P.mode == P_MUTATION) {
+        if (P.tick == P.start) {
+            struct { const char *name; uint8_t *p; int part; } m[] = {
+                { "g_ram[0x0100]", &g_ram[0x100], 0 }, { "g_cpu.A", &g_cpu.A, 0 },
+                { "g_sram[3]", &g_sram[3], 0 }, { "g_ppu_oam[5]", &g_ppu_oam[5], 1 },
+                { "g_ppu_nt[10]", &g_ppu_nt[10], 1 }, { "g_ppu_pal[4]", &g_ppu_pal[4], 1 },
+                { "g_controller2_buttons", &g_controller2_buttons, 2 },
+                { "g_logical_input[3]", &g_logical_input[3], 2 },
+            };
+            int ok = 0, n = (int)(sizeof m / sizeof m[0]), i, k;
+            NesRbDigest base, mut, back;
+            nes_rb_state_invalidate();
+            nes_rb_state_digest(&base);
+            for (i = 0; i < n; ++i) {
+                uint8_t keep = *m[i].p;
+                int good = 1;
+                *m[i].p ^= 0x5a;
+                nes_rb_state_invalidate();
+                nes_rb_state_digest(&mut);
+                *m[i].p = keep;
+                nes_rb_state_invalidate();
+                nes_rb_state_digest(&back);
+                if (mut.master == base.master) good = 0;
+                for (k = 0; k < 3; ++k)
+                    if ((mut.part[k] != base.part[k]) != (k == m[i].part)) good = 0;
+                if (back.master != base.master) good = 0;
+                ok += good;
+                fprintf(stderr, "RB_MUTATION %-22s part=%s master %08x->%08x restored=%s %s\n",
+                        m[i].name, nes_rb_part_name(m[i].part), (unsigned)base.master,
+                        (unsigned)mut.master, back.master == base.master ? "yes" : "NO",
+                        good ? "ok" : "FAIL");
+            }
+            fprintf(stderr, "RB_MUTATION_SUMMARY %d/%d\n", ok, n);
+        }
+        return;
+    }
     if (P.mode == P_DIGEST_ONLY) {
         /* Snapshot + digest exactly as a live netplay tick would, never load. */
         size_t n = 0;

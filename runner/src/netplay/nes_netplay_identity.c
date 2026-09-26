@@ -125,9 +125,14 @@ const char *nes_netplay_identity_game_version(void)
             nes_sha256(exe, len, d);
             free(exe);
             s_build_fp = fold(d);
+            /* The lobby carries RNET_LOBBY_VERSION_LEN-1 = 31 characters and
+             * a longer string is truncated on one path and not the other
+             * (measured: every join refused "version_mismatch"). Keep the
+             * whole identity inside 31: <=18 of the release pin, '+', 12 hex
+             * (48 bits) of the executable's SHA-256. */
             snprintf(s_version, sizeof(s_version),
-                     "%s+%02x%02x%02x%02x%02x%02x%02x%02x", NESRECOMP_GAME_VERSION,
-                     d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7]);
+                     "%.18s+%02x%02x%02x%02x%02x%02x", NESRECOMP_GAME_VERSION,
+                     d[0], d[1], d[2], d[3], d[4], d[5]);
         } else {
             /* Without the image there is no exact identity; say so in the
              * string rather than pass for a stamped build. */

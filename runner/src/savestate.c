@@ -80,6 +80,12 @@ typedef struct {
     uint8_t resume_tick_charged;
 } SaveStateData;
 
+/* Size drift guard: the V7 image IS this struct. A field added, removed or
+ * resized changes every file and every rollback digest partition boundary;
+ * that must be a deliberate format bump (SS_VERSION), not an accident. */
+_Static_assert(sizeof(SaveStateData) == 23720,
+               "SaveStateData changed size: bump SS_VERSION and update this guard");
+
 /* runtime.c must expose latch state — we access via a get/set pair declared below */
 void runtime_get_latch_state(uint8_t *ppuaddr_latch, uint8_t *scroll_latch);
 void runtime_set_latch_state(uint8_t ppuaddr_latch, uint8_t scroll_latch);

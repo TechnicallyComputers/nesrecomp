@@ -40,6 +40,8 @@
 #define NESRECOMP_GAME_PLAYERS 2
 #endif
 
+void nes_runner_register_session_keys(void);   /* main_runner.c */
+
 static int s_inited;
 static char s_game_name[96];
 
@@ -137,6 +139,7 @@ const RecompLauncherCNetplayCallbacks *nes_host_lobby_init(const char *game_name
     RecompNetplayHostHooks h;
     if (rom_path && rom_path[0])
         (void)nes_netplay_identity_set_rom_file(rom_path);
+    nes_runner_register_session_keys();
     if (s_inited)
         return recomp_netplay_host_callbacks();
     snprintf(s_game_name, sizeof(s_game_name), "%s",
@@ -253,7 +256,16 @@ static int count_members(int spectators)
     }
     return n;
 }
-static int players_seated(void) { return count_members(0); }
+static int players_seated(void)
+{
+    /* LAN rooms live in recomp-ui's rnet_lan_* modules, not the lobby
+     * client's member table: count them through the callback table. */
+    if (getenv("NES_LOBBY_SELFTEST_LAN")) {
+        const RecompLauncherCNetplayCallbacks *cb = recomp_netplay_host_callbacks();
+        return cb ? cb->member_count(NULL) : 0;
+    }
+    return count_members(0);
+}
 static int spectators_seated(void) { return count_members(1); }
 
 int nes_host_lobby_selftest_room(int round, NesNetplayConfig *cfg)
@@ -361,6 +373,18 @@ int nes_host_lobby_selftest_room(int round, NesNetplayConfig *cfg)
             started = cb->request_start(NULL, &settings) == 0;
             fprintf(stderr, "[lobby-selftest] host round=%d start=%d members=%d\n",
                     round, started, cb->member_count(NULL));
+        }
+        {
+            static uint32_t next_dbg;
+            if (st_now() >= next_dbg) {
+                next_dbg = st_now() + 2000u;
+                fprintf(stderr, "[lobby-selftest] %s round=%d in_lobby=%d members=%d players=%d "
+                                "spectators=%d local_ready=%d all_ready=%d ready_sent=%d last_error=%s\n",
+                        is_host ? "host" : "guest", round, cb->in_lobby(NULL),
+                        cb->member_count(NULL), players_seated(), spectators_seated(),
+                        cb->local_ready(NULL), cb->all_ready(NULL), ready_sent,
+                        cb->last_error && cb->last_error(NULL) ? cb->last_error(NULL) : "");
+            }
         }
         if (cb->launch_pending(NULL)) {
             int ok = cb->fill_launch(NULL, &launch);

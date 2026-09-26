@@ -15,7 +15,7 @@
 
 | where | what |
 |---|---|
-| `lib/recomp-net` 03ee1b1 | the driver, LAN transport + hub, lobby client, link simulator (RetroPortingToolKit `feat/rb-sparse-seats-and-ws-backlog` = main a9d20e2 + sparse-seat seal fix + WS backlog) |
+| `lib/recomp-net` bdc58b6 | the driver, LAN transport + hub, lobby client, link simulator (RetroPortingToolKit `feat/nes-spectator` = `feat/rb-sparse-seats-and-ws-backlog` 03ee1b1 [main a9d20e2 + sparse-seat seal fix + WS backlog] + the observer fix, §5) |
 | `lib/retcomm-rbengine` 2a03e73 | the snapshot ring and the monotonic clock |
 | `runner/src/savestate.c` | ONE in-memory serializer; the V7 file is exactly its byte stream |
 | `runner/src/rollback/nes_rb_state.c` | the rollback snapshot (V7 image + logical-input trailer) and the per-tick digest over the same bytes |
@@ -141,9 +141,10 @@ executable. See each script's header.
 Status legend as in the N64 import matrix: **measured** = a run exercised it
 and counted it above zero; **bound** = wired, exercised indirectly;
 **partial** / **open** = see the note; **n/a** = no analog. Runs: Linux,
-`SuperMarioBrosRecomp` (SMB `feat/rollback-netplay`), headless, loopback; the
-sweep binary is nesrecomp f6daf6b, the lobby/probe/mutation binary 2026-09-25
-tip. Logs were under `/tmp/claude-1000/s/` (not kept).
+`SuperMarioBrosRecomp` (SMB `feat/rollback-netplay`), headless, loopback,
+nesrecomp 774ad3f + recomp-ui b9ef2f5. **Logs, screenshots and tables are
+kept in `_gn-netplay/nes/evidence/`** (sweep.txt + sweep/, lobby-*.txt +
+dirs, sram-sync/; executables pruned).
 
 | Capability | Status | Evidence |
 |---|---|---|
@@ -154,15 +155,15 @@ tip. Logs were under `/tmp/claude-1000/s/` (not kept).
 | snapshot ring | measured | rbengine ring, depth 16/40/240 cells PASS |
 | lobby client + launcher callbacks | measured | recomp-ui `recomp_netplay_host` via `nes_host_lobby.c`; online create/join/launch 2 and 4 seats; identity `game_version`=`v1.11.0-1-g5d553c9+<12 hex of exe SHA-256>` (fits the lobby's 31 chars -- a longer one was refused `version_mismatch` on every join, fixed), `content_fingerprint`=ROM SHA-256 `0b3d9e1f...` |
 | **Driver** | | |
-| episode FSM | measured | sweep: 116 episodes baseline ... 656 at 4 seats; ledger residual 0 in every cell |
+| episode FSM | measured | sweep (evidence/sweep.txt): 118 episodes baseline ... 656 at 4 seats; ledger residual 0 in every cell |
 | tip-hold / tip-extend | measured | tip-hold every cell; 53 tip-extends in STRESS |
-| stage watchdogs | measured | 1 watchdog at 3 seats 2% loss, explained, residual 0 |
+| stage watchdogs | measured | 1 watchdog in the 4-seat 2% loss cell, explained, residual 0 |
 | fork cap / lockstep_no_invent | lifted | recomp-net's; not separately driven here |
 | boot-digest gate | measured | `NES_RB_FORCE_BOOT_FORK=1`: both peers `BOOT DIGEST MISMATCH`, refused `boot_digest_mismatch` at sim=1, 0 episodes; online lobby: both soft-return with `last_error="boot_digest_mismatch"` |
-| rematch cold reset | measured | online 2 rounds: sessions 2 then 3 (fresh), boot parts identical, both drained and back in the room; offline Play after the rematch `RUN_DONE frames=900 state=7361e53c fb_crc=d77c70bd` == a fresh process. Two carriers found and fixed: the lazy dot-clock init and a pending guest-resume request surviving `runtime_session_reset` |
+| rematch cold reset | measured | online 2 rounds (evidence/lobby-online-2p): sessions 2 then 3 (fresh), boot parts identical, both drained and back in the room; offline Play after the rematch `RUN_DONE frames=900 state=7361e53c fb_crc=d77c70bd` == a fresh process. Two carriers found and fixed: the lazy dot-clock init and a pending guest-resume request surviving `runtime_session_reset` |
 | FRAME_COMMIT chain | advisory | as on SNES/N64; 0 chain stalls outside STRESS |
 | N seats | measured | 3 seats 0 ms (336 ep), 200 ms (72), 2% loss (105); 4 seats 0 ms (656), 200 ms (358), 2% loss (624), organic 300 ms (157): 0 forks, ledger exact per pair, all drained, confirmed-frame digest + PNG identical on every peer |
-| replay ownership | incremental | INCREMENTAL, one replayed tick per outer callback; continuation restarted every tick (§2); replay cost 0.8-1.6 ms p50 |
+| replay ownership | incremental | INCREMENTAL, one replayed tick per outer callback; continuation restarted every tick (§2). Host cost per tick measured admit -> end of the frame's work, before present/vsync and pacing: live 0.8-1.0 ms p50 / 1.3-1.7 p99, replay 0.7-0.9 ms p50 / 0.8-2.5 p99 across the 19 cells (the first sweep's 9-16 ms live p50 included the vsync wait and is superseded) |
 | **Engine** | | |
 | snapshot fast path | measured | 167,018 B image (SMB incl. mod records): save 0.007 ms p50 / 0.014 p99, load 0.037-0.043 ms p50 / 0.058-0.068 p99 |
 | partitioned per-tick digest | measured | over the snapshot bytes, `cpu_wram`/`ppu`/`apu_io_mods`; 0.057-0.069 ms p50; mutation test 8/8 (each flip changes exactly its partition, restore returns the digest); size guard `_Static_assert(sizeof(SaveStateData)==23720)` |
@@ -172,10 +173,10 @@ tip. Logs were under `/tmp/claude-1000/s/` (not kept).
 | per-tick host loop, netplay off unchanged | measured | 3000-frame smoke, save-state files + load/resume, scripted 1P and 4P co-op runs: byte-identical to the pre-change build; SMB co-op suites and mod-off stock regression PASS |
 | config seal | measured | session image `nes-session/1;coop=4:player;widescreen=0;` from the host's offline selection, applied on every peer, confirmed by the mod-set handshake ("peer confirmed the mod set"); refused online: scripts, recording, --loadstate, probe, TCP execution control, quick states, turbo (`coop_package.py --net-enabled`: scripts refused) |
 | **Product** | | |
-| recomp-ui lobby | measured | online create/join/launch/rematch/forced-fork soft return (above); 4 players + 1 spectator through the server relay; LAN: 1 match PASS, rematch **open** (§6); launcher screens NOT seen on a display |
-| harness | measured | `rb_loopback.sh` 2-4 seats, `rb_sweep.sh` pre-flight + 19 cells SWEEP PASS, `rb_lobby.sh` |
-| host-authoritative SRAM + sandbox | bound | pre-boot barrier over RNET_STATE_OP_SRAM, guest `saves/netplay/`; SMB has no battery so the barrier is skipped (`sram=none`); `NES_NET_SRAM_SYNC=1` forces it -- **not measured** in a run |
-| spectators | partial | relay gallery seat launches `spectator=1`, boot digest agreed with every peer, 0 forks; but lags the players (sim 587 of 1200), NACKs their episodes ("no local row"), and timed out connecting to the rematch (§6) |
+| recomp-ui lobby | measured | online create/join/launch/rematch (lobby-online-2p) and forced-fork soft return (lobby-bootfork); 4 players + 1 spectator x 2 rounds (lobby-online-4p-spect); **LAN rematch: 2 runs x 2 matches PASS, fresh host-allocated ids per START (135361498 -> 135361499, 810949062 -> 810949063), 0 forks** (lobby-lan-1/2) after the recomp-ui fix (§6); launcher screens NOT seen on a display |
+| harness | measured | `rb_loopback.sh` 2-4 seats (fresh session id per run), `rb_sweep.sh` pre-flight + 19 cells SWEEP PASS (twice; latest in evidence/), `rb_lobby.sh` online/LAN/spectators/forced fork/offline-after |
+| host-authoritative SRAM + sandbox | n/a for SMB; path measured | SMB has no battery (the barrier is skipped, `sram=none`). Forced with `NES_NET_SRAM_SYNC=1` (evidence/sram-sync): host sends 8192 B over RNET_STATE_OP_SRAM before boot, guest applies it and passes the barrier in 1-13 ms, 4/4 matches PASS. The run found a defect (the host never FINISHED the transfer, so it stopped sending input and both peers hit 'peer gone') -- fixed. Guest sandbox `saves/netplay/` is wired; no battery title has exercised it |
+| spectators | measured | 4 seats + 1 spectator through the relay, 2 rounds (evidence/lobby-online-4p-spect): spectator launches `spectator=1`, LOCKSTEP pinned (observer), 0 invents, 0 episodes, ignores the players' 158 BEGINs, 0 forks, keeps up (sim 1208 vs host 1203), same confirmed digest at tick 900 as all four players, drained and back in the room after both matches. Fixed in recomp-net (bdc58b6, `rb_driver_test 4seat-observer-rtt60`, which fails on 03ee1b1) |
 | ICE / internet | not built | refused (`ice_not_built`); online = lobby server UDP relay |
 
 ## 6. Open defects and decisions
@@ -185,14 +186,17 @@ tip. Logs were under `/tmp/claude-1000/s/` (not kept).
   hardware is 3. Fixing it in `code_generator.c` changes netplay-off output for
   every title (all-title validation, human-approved sweep). Rollback does not
   depend on it (§2).
-- **LAN rematch**: the guest re-seats and arms a launch with session id 1
-  before the host's START (host 1048783612) -> connect_timeout on both. In
-  recomp-ui's Direct IP rematch path (`cb_launch_pending` / `lan_direct`);
-  online rematch unaffected.
-- **Spectators** (see matrix): observer lag / NACKs / rematch connect.
+- **Fixed since the first report** (kept here so the claims above can be
+  checked): LAN rematch -- the guest armed its launch on the host's ROOM
+  refresh (sent before START, no session id) and launched session 1; recomp-ui
+  `feat/nes-lan-rematch` b9ef2f5 arms only on START (test + HOST_NETPLAY.md).
+  Spectators -- the driver ran an observer as a predicting player; recomp-net
+  `feat/nes-spectator` bdc58b6. Harness -- every rb_loopback run reused session
+  id 1, so a previous run's BYE could end the next match.
 - **Pre-existing, not introduced**: nesrecomp `tests/coop_input` (FAIL line 60
   `initial==0`) and `tests/runtime_boundary` (ppumask assertion) fail
-  identically at origin/master 1dbe574.
+  identically at origin/master 1dbe574 -- recorded at the claim site,
+  `tests/README.md`.
 - The zapper-only `saved_ctr0` restore in `maybe_trigger_vblank` is skipped by
   the per-tick restart (zapper titles are not a netplay target; flagged).
 - Mod save-state hooks of inactive SMB mods (Link, Samus, Sonic, Smash64) print

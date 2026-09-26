@@ -163,6 +163,9 @@ for ((i = 0; i < SEATS + SPECT; i++)); do
         "./$(basename "$EXE")" "$ROM" "${EXTRA[@]}") >"$OUT/$role.log" 2>&1 &
     PID[$role]=$!
     [ "$i" -eq 0 ] && sleep 1   # the host's room exists before anyone looks for it
+    # Spectators come in after the players have their seats, so the gallery
+    # is theirs and not a race for seat numbers.
+    [ "$i" -eq $((SEATS - 1)) ] && [ "$SPECT" -gt 0 ] && sleep 4
 done
 
 t0=$SECONDS

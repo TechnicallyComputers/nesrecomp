@@ -114,7 +114,13 @@ for ((s = 0; s < SEATS; s++)); do ROLES+=("$(role_of $s)"); done
 ORDER=(initiator follower)
 for ((s = 2; s < SEATS; s++)); do ORDER+=("$(role_of $s)"); done
 
+# A fresh session id per run, as a lobby hands out per match: every run used
+# id 1 on the same ports, so a BYE from the previous run's peers (sent as
+# they left) ended the next run's match as "peer gone" -- measured 1 in 3
+# back-to-back runs, with and without NES_NET_SRAM_SYNC.
+SESSION_ID=$(( (RANDOM << 15 | RANDOM) + 2 ))
 common=(SDL_VIDEODRIVER="${RB_LOOPBACK_VIDEO:-dummy}" SDL_AUDIODRIVER=dummy
+        NES_NET_SESSION_ID="$SESSION_ID"
         NES_NETPLAY=1 NES_NET_SLOTS=$SEATS NES_NET_MODE=rollback
         NES_NET_DELAY="${NES_NET_DELAY:-8}"
         NES_NET_PREDICTION="${NES_NET_PREDICTION:-12}")

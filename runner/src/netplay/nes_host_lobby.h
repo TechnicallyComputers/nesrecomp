@@ -26,6 +26,7 @@ void nes_host_lobby_returned(RecompLauncherCGameInfo *gi, const char *error_code
 int  nes_host_lobby_selftest_role(void);
 int  nes_host_lobby_selftest_room(int round, NesNetplayConfig *cfg);
 void nes_host_lobby_selftest_report(int round);
+void nes_host_lobby_selftest_linger(unsigned ms);
 
 #ifdef __cplusplus
 }

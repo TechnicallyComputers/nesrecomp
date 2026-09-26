@@ -397,9 +397,16 @@ static int np_sram_barrier_step(void)
             fprintf(stderr, "nes_netplay: sending host SRAM (%u bytes)\n",
                     (unsigned)sizeof(g_sram));
         }
-        if (!rnet_session_state_busy(g_np.session)) {
+        /* Done when the session hands the finished transfer back, and the
+         * host must FINISH it (as the guest does): a transfer left open kept
+         * the session in its state-transfer mode, the host stopped sending
+         * input, and the guest waited at tick 8 until "peer gone" (measured
+         * with NES_NET_SRAM_SYNC=1, 2026-09-25). */
+        if (rnet_session_state_take_ready(g_np.session, &op, &slot, &data, &size)) {
+            rnet_session_state_finish(g_np.session, 0);
             g_np.sram_done = 1;
-            fprintf(stderr, "nes_netplay: host SRAM delivered to every peer\n");
+            fprintf(stderr, "nes_netplay: host SRAM delivered to every peer (%u bytes)\n",
+                    (unsigned)sizeof(g_sram));
         }
         return g_np.sram_done;
     }
@@ -512,7 +519,13 @@ int nes_netplay_poll_admit(void)
     if (!nes_netplay_rb_draining() && !nes_netplay_rb_quiesced() &&
         rnet_session_is_running(g_np.session) &&
         rnet_session_peer_disconnected(g_np.session, 1500)) {
-        fprintf(stderr, "nes_netplay: peer gone — returning to the lobby\n");
+        RNetSessionStats st;
+        memset(&st, 0, sizeof(st));
+        rnet_session_get_stats(g_np.session, &st);
+        fprintf(stderr, "nes_netplay: peer gone (%s; packets_rx=%u state_busy=%d) — "
+                        "returning to the lobby\n",
+                rnet_session_peer_disconnected(g_np.session, 0) ? "BYE" : "silent 1.5 s",
+                (unsigned)st.packets_rx, st.state_busy);
         nes_netplay_request_return_to_lobby("peer_disconnected");
     }
     return NES_NETPLAY_ADMIT_STALL;

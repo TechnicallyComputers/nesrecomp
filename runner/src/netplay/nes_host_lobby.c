@@ -416,3 +416,11 @@ void nes_host_lobby_selftest_report(int round)
             nes_host_lobby_selftest_role() == 1 ? "host" : "guest", round,
             cb->in_lobby(NULL), cb->is_host(NULL), cb->member_count(NULL), e ? e : "");
 }
+
+void nes_host_lobby_selftest_linger(unsigned ms)
+{
+    const RecompLauncherCNetplayCallbacks *cb = recomp_netplay_host_callbacks();
+    uint32_t end = st_now() + ms;
+    if (!cb) return;
+    while (st_now() < end) { cb->pump(NULL); SDL_Delay(10); }
+}

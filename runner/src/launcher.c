@@ -687,6 +687,13 @@ reopen_recomp_launcher:
         }
         nes_host_lobby_returned(NULL, s_net_return_error);
         nes_host_lobby_selftest_report(rounds);
+        /* The room outlives this process's last match only while it pumps:
+         * linger so the other peers can report being back in it before the
+         * host (or anyone) leaves and closes it (NES_LOBBY_SELFTEST_LINGER_MS). */
+        {
+            const char *lg = getenv("NES_LOBBY_SELFTEST_LINGER_MS");
+            nes_host_lobby_selftest_linger(lg ? (unsigned)atoi(lg) : 4000u);
+        }
         if (off && off[0] == '1') {
             fprintf(stderr, "[lobby-selftest] offline Play after the last match\n");
 #if NESRECOMP_ENABLE_MODS

@@ -4,6 +4,19 @@ This directory contains repository-level synthetic and focused native tests.
 Per-game regression tests live in each game repo's `tests/` directory.
 The orchestrator script lives in `nesrecomp-release/run-tests.sh`.
 
+**Known failures (recorded 2026-09-25, Linux gcc, -O2 with asserts):** two of
+these self-tests fail at origin/master `1dbe574` and identically on
+`feat/rollback-netplay` -- they are pre-existing, not regressions, and not yet
+root-caused:
+
+- `tests/coop_input`: `FAIL line 60: initial==0`.
+- `tests/runtime_boundary`: `test_ppumask_preserves_native_bits: Assertion
+  'g_ppumask == (uint8_t)mask' failed`.
+
+`foreign_controller`, `mapper`, `mod_runtime` and `render_audio` (3) pass on
+both. A claim that "the focused self-tests pass" is false until these two are
+fixed.
+
 The focused native self-tests remain standalone CMake projects, matching the
 historical mapper test:
 

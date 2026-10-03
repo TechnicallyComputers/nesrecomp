@@ -109,17 +109,32 @@ int  nes_lobby_list_get(int index, NesLobbyRow *out);
  * Create lobby. host_bind e.g. "0.0.0.0:7777". password may be NULL/empty.
  * match_caps may be NULL (legacy); when non-NULL and valid, sent to the server
  * so guests join with the host's sim settings.
+ * max_slots: requested room seats; clamped to 2..nes_net_seat_cap().
  * Returns 0 if request sent; poll nes_lobby_join_info() / in_lobby().
  */
 int  nes_lobby_create(const char *name, const char *game_name,
                       const char *game_version, const char *password,
                       const char *host_bind,
-                      const NesLobbyMatchCaps *match_caps);
+                      const NesLobbyMatchCaps *match_caps,
+                      int max_slots);
 
 int  nes_lobby_join(const char *lobby_id, const char *password,
                     const char *guest_bind);
 
 int  nes_lobby_leave(void);
+
+/* Host relay preferences (the shared client's; they apply to rooms created
+ * from now on, and a guest's getter answers what the host published).
+ * relay_via_ice is only effective with the host relay on and an ICE build. */
+int  nes_lobby_relay_host_get(void);
+void nes_lobby_relay_host_set(int on);
+int  nes_lobby_relay_via_ice_get(void);
+void nes_lobby_relay_via_ice_set(int on);
+/* Seat ceiling of the room we are in (0 when not in a lobby). */
+int  nes_lobby_max_slots(void);
+/* Latest lobby error code ("" when none). */
+const char *nes_lobby_last_error(void);
+void nes_lobby_clear_last_error(void);
 
 int  nes_lobby_in_lobby(void);
 int  nes_lobby_is_host(void);

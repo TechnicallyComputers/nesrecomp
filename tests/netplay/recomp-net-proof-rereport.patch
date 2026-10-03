@@ -1,0 +1,107 @@
+diff --git a/include/recomp_net/host_ice.h b/include/recomp_net/host_ice.h
+index 508696f..2eddb93 100644
+--- a/include/recomp_net/host_ice.h
++++ b/include/recomp_net/host_ice.h
+@@ -121,6 +121,13 @@ void rnet_host_ice_destroy(RNetHostIce **h);
+  * signals and path reports. An inactive view destroys every agent. */
+ void rnet_host_ice_update(RNetHostIce *h, const RNetHostIceView *v);
+ 
++/* GUEST: the lobby server cleared this seat's path proof (it does so for every
++ * seat on any membership change, see ws_lobby clear_lobby_ice_paths). Re-send
++ * the path_report for a still-COMPLETED agent now instead of at the 45 s
++ * refresh. Call once per lobby_update that shows our own row without a fresh
++ * proof. No-op for a host, an idle module or an agent that is not COMPLETED. */
++void rnet_host_ice_proof_cleared(RNetHostIce *h);
++
+ /* 1 when `type` is in this module's lobby signal range (BASE+1..BASE+6). */
+ int rnet_host_ice_sig_is_ours(int wire_type);
+ 
+diff --git a/src/lobby/rnet_lobby_client.c b/src/lobby/rnet_lobby_client.c
+index ec8e088..c3c49cd 100644
+--- a/src/lobby/rnet_lobby_client.c
++++ b/src/lobby/rnet_lobby_client.c
+@@ -1135,6 +1135,8 @@ static int host_ice_send_signal(const char *to, int type, int flag, const char *
+ }
+ 
+ /* Every pump, beside host_relay_step: the room decides which agents exist. */
++static unsigned g_member_update_seq, g_ice_seen_update_seq;
++
+ static void host_ice_step(void)
+ {
+     RNetHostIceView v;
+@@ -1189,6 +1191,21 @@ static void host_ice_step(void)
+     v.send_signal = host_ice_send_signal;
+     v.send_json = host_relay_send;
+     rnet_host_ice_update(g_host_ice, &v);
++    /* The server clears every seat's path proof on a membership change and
++     * the guest's report is otherwise only refreshed every 45 s, so a guest
++     * seated before the last joiner would stall the start for that long. A
++     * lobby_update that shows our own row unproven means: report again. */
++    if (v.active && !v.is_host && g_member_update_seq != g_ice_seen_update_seq) {
++        const int me = member_slot_for_player(g_lc.player_id);
++        g_ice_seen_update_seq = g_member_update_seq;
++        if (me >= 0) {
++            int i;
++            for (i = 0; i < g_lc.member_count; ++i)
++                if (strcmp(g_lc.members[i].player_id, g_lc.player_id) == 0 &&
++                    !g_lc.members[i].path_fresh)
++                    rnet_host_ice_proof_cleared(g_host_ice);
++        }
++    }
+ }
+ 
+ int rnet_lobby_host_ice_status(RNetHostIceStatus *out)
+@@ -2066,6 +2083,7 @@ static int parse_seat_array(const char *json, const char *key, int is_spectator,
+                 json_get_str(chunk, "path", g_lc.members[n].path,
+                              sizeof(g_lc.members[n].path));
+                 g_lc.members[n].path_fresh = json_get_bool(chunk, "path_fresh", 0) ? 1 : 0;
++                g_member_update_seq++;
+                 /* mod_offer is an OBJECT -- {"pkgs":[...]} -- not a bare
+                  * array. The server requires an object (sanitize_mod_offer
+                  * rejects anything else) and echoes it back verbatim, so the
+diff --git a/src/nat/rnet_host_ice.c b/src/nat/rnet_host_ice.c
+index 2d4e939..542eb14 100644
+--- a/src/nat/rnet_host_ice.c
++++ b/src/nat/rnet_host_ice.c
+@@ -29,6 +29,7 @@ typedef struct HiPeer {
+     char last_report[8];
+     rnet_u64 report_due_ms;
+     rnet_u64 retry_at_ms;
++    int rereport; /* the server dropped our proof: report again now */
+ } HiPeer;
+ 
+ struct RNetHostIce {
+@@ -274,7 +275,7 @@ static void guest_report(RNetHostIce *h, HiPeer *p, rnet_u64 now)
+ {
+     const RNetIceState st = rnet_ice_agent_state(p->agent);
+     if (st == RNET_ICE_STATE_COMPLETED) {
+-        if (strcmp(p->last_report, "direct") != 0 || now >= p->report_due_ms) {
++        if (strcmp(p->last_report, "direct") != 0 || now >= p->report_due_ms || p->rereport) {
+             char path[16];
+             const char *ice = NULL;
+             path[0] = '\0';
+@@ -284,6 +285,7 @@ static void guest_report(RNetHostIce *h, HiPeer *p, rnet_u64 now)
+             if (send_report(h, "direct", ice) == 0) {
+                 snprintf(p->last_report, sizeof(p->last_report), "direct");
+                 p->report_due_ms = now + HI_REPORT_REFRESH_MS;
++                p->rereport = 0;
+             }
+         }
+         return;
+@@ -303,6 +305,16 @@ static void guest_report(RNetHostIce *h, HiPeer *p, rnet_u64 now)
+     }
+ }
+ 
++void rnet_host_ice_proof_cleared(RNetHostIce *h)
++{
++    int i;
++    if (h == NULL || h->role != 2)
++        return;
++    for (i = 0; i < RNET_HOST_ICE_MAX_PEERS; ++i)
++        if (h->peer[i].used)
++            h->peer[i].rereport = 1;
++}
++
+ void rnet_host_ice_update(RNetHostIce *h, const RNetHostIceView *v)
+ {
+     int i, j;

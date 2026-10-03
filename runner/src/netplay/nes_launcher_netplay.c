@@ -61,7 +61,7 @@ static int cb_get(void*x,int i,RecompLauncherCNetplayLobby*o){NesLobbyRow r;int 
 static int cb_addr(void*x,int i,RecompLauncherCNetplayLocalAddress*o){(void)x;if(!o||i<0)return 0;if(i==0){s_address_count=rnet_ipv4_enumerate(s_addresses,MAX_LOCAL_ADDRESSES);if(s_address_count<0)s_address_count=0;if(s_address_count>MAX_LOCAL_ADDRESSES)s_address_count=MAX_LOCAL_ADDRESSES;}if(i>=s_address_count)return 0;memset(o,0,sizeof(*o));snprintf(o->address,sizeof(o->address),"%s",s_addresses[i].address);snprintf(o->label,sizeof(o->label),"%s",s_addresses[i].interface_label);return 1;}
 static int cb_local_ip(void*x,char*o,size_t z){RecompLauncherCNetplayLocalAddress a;if(!o||!z||!cb_addr(x,0,&a))return 0;snprintf(o,z,"%s",a.address);return *o!=0;}
 static int cb_external_ip(void*x,char*o,size_t z){RNetExternalIpv4Config c;int rc;(void)x;if(!o||!z)return 0;if(!s_external_ip[0]){rnet_external_ipv4_config_init(&c);c.timeout_ms=900;rc=rnet_external_ipv4_discover(&c,s_external_ip,sizeof(s_external_ip));if(rc!=RNET_EXTERNAL_IPV4_OK){snprintf(o,z,"Unavailable");return 0;}}snprintf(o,z,"%s",s_external_ip);return *o!=0;}
-static int cb_create(void*x,const char*n,char*ep,const char*pw,const RecompLauncherCSettings*s,int lan_only){NesLobbyMatchCaps c=caps(s);const char*e=ep&&*ep?ep:"0.0.0.0:7777";(void)x;if(lan_only)return publish_lan(n,e,pw)?0:-1;s_hosting_lan=s_joined_lan=0;return nes_lobby_create(n&&*n?n:"Netplay Lobby",s_game,s_version,pw?pw:"",e,&c);}
+static int cb_create(void*x,const char*n,char*ep,const char*pw,const RecompLauncherCSettings*s,int lan_only,int max_slots){NesLobbyMatchCaps c=caps(s);const char*e=ep&&*ep?ep:"0.0.0.0:7777";(void)x;if(lan_only)return publish_lan(n,e,pw)?0:-1;s_hosting_lan=s_joined_lan=0;return nes_lobby_create(n&&*n?n:"Netplay Lobby",s_game,s_version,pw?pw:"",e,&c,max_slots);}
 static int cb_join(void*x,const char*id,const char*pw,char*guest_bind){RNetLanLobby s;const char*b=guest_bind&&*guest_bind?guest_bind:"0.0.0.0:7778";(void)x;snprintf(s_guest_bind,sizeof(s_guest_bind),"%s",b);memset(&s_lan_launch,0,sizeof(s_lan_launch));if(id&&strncmp(id,"lan:",4)==0){const char*n=nes_lobby_display_name();if(rnet_lan_lobby_join(lan_path(),s_game,s_version,pw?pw:"",n&&*n?n:"Player",&s)!=RNET_LAN_LOBBY_OK)return -1;s_hosting_lan=0;s_joined_lan=1;return 0;}s_hosting_lan=s_joined_lan=0;return nes_lobby_join(id,pw?pw:"",b);}
 static int cb_leave(void*x){(void)x;if(s_hosting_lan)(void)rnet_lan_lobby_leave(lan_path(),1);else if(s_joined_lan)(void)rnet_lan_lobby_leave(lan_path(),0);s_hosting_lan=s_joined_lan=0;memset(&s_lan_launch,0,sizeof(s_lan_launch));return nes_lobby_leave();}
 static int cb_in(void*x){(void)x;return s_hosting_lan||s_joined_lan||nes_lobby_in_lobby();}
@@ -78,7 +78,17 @@ static int cb_pending(void*x){RNetLanLobby s;const char*c,*p;(void)x;if((s_hosti
  * BEFORE the lobby launch is cleared -- fill_launch may be polled many times,
  * clear runs once when the launcher commits to the match. */
 static void cb_clear(void*x){(void)x;if(!s_lan_launch.enabled&&nes_lobby_launch_pending())(void)nes_netplay_capture_lobby_launch();memset(&s_lan_launch,0,sizeof(s_lan_launch));nes_lobby_clear_launch_pending();}
-static int cb_fill(void*x,RecompLauncherCNetplayLaunch*o){const NesLobbyJoinInfo*j;const NesLobbyMatchCaps*c;(void)x;if(!o)return 0;if(s_lan_launch.enabled){*o=s_lan_launch;s_last_launch_was_lan=1;return 1;}j=nes_lobby_join_info();if(!j||!j->ok)return 0;if(!nes_netplay_validate_lobby_launch())return 0;c=nes_lobby_match_caps();memset(o,0,sizeof(*o));o->enabled=1;o->local_slot=j->local_slot;o->session_id=j->session_id;o->input_delay=c&&c->valid?c->input_delay:2;snprintf(o->bind_hostport,sizeof(o->bind_hostport),"%s",j->bind_hostport);snprintf(o->peer_hostport,sizeof(o->peer_hostport),"%s",j->peer_hostport);s_last_launch_was_lan=0;return 1;}
+static int cb_fill(void*x,RecompLauncherCNetplayLaunch*o){const NesLobbyJoinInfo*j;const NesLobbyMatchCaps*c;(void)x;if(!o)return 0;if(s_lan_launch.enabled){*o=s_lan_launch;s_last_launch_was_lan=1;return 1;}j=nes_lobby_join_info();if(!j||!j->ok)return 0;if(!nes_netplay_validate_lobby_launch())return 0;c=nes_lobby_match_caps();memset(o,0,sizeof(*o));o->enabled=1;o->local_slot=j->local_slot;o->session_id=j->session_id;o->input_delay=c&&c->valid?c->input_delay:2;o->max_slots=j->max_slots;o->player_count=j->player_count;o->transport_host=j->transport_host;o->transport_ice_hub=j->transport_ice_hub;o->force_input_relay=j->force_input_relay;snprintf(o->bind_hostport,sizeof(o->bind_hostport),"%s",j->bind_hostport);snprintf(o->peer_hostport,sizeof(o->peer_hostport),"%s",j->peer_hostport);s_last_launch_was_lan=0;return 1;}
+/* LAN rooms carry exactly one joiner (recomp-net's LAN room); online rooms
+ * seat up to the build's ceiling (nes_net_seat_cap via the lobby client). */
+static int cb_create_max(void*x,int lan_only){(void)x;return lan_only?2:nes_netplay_max_seats();}
+static int cb_lobby_max(void*x){(void)x;return(s_hosting_lan||s_joined_lan)?2:nes_lobby_max_slots();}
+static const char *cb_last_error(void*x){(void)x;return nes_lobby_last_error();}
+static void cb_clear_err(void*x){(void)x;nes_lobby_clear_last_error();}
+static int cb_relay_host_get(void*x){(void)x;return nes_lobby_relay_host_get();}
+static int cb_relay_host_set(void*x,int on){(void)x;nes_lobby_relay_host_set(on);return 0;}
+static int cb_relay_ice_get(void*x){(void)x;return nes_lobby_relay_via_ice_get();}
+static int cb_relay_ice_set(void*x,int on){(void)x;nes_lobby_relay_via_ice_set(on);return 0;}
 
 static RecompLauncherCNetplayCallbacks s_callbacks={
     .ctx=0,.default_url=cb_url,.set_lobby_url=cb_set_url,.connect=cb_connect,
@@ -90,7 +100,10 @@ static RecompLauncherCNetplayCallbacks s_callbacks={
     .move_member=cb_move,.local_ready=cb_local_ready,.all_ready=cb_all_ready,
     .set_ready=cb_ready,.request_start=cb_start,.launch_pending=cb_pending,
     .clear_launch_pending=cb_clear,.fill_launch=cb_fill,
-    .local_address_get=cb_addr
+    .local_address_get=cb_addr,.last_error=cb_last_error,.clear_last_error=cb_clear_err,
+    .lobby_max_slots=cb_lobby_max,.create_max_slots=cb_create_max,
+    .relay_host_get=cb_relay_host_get,.relay_host_set=cb_relay_host_set,
+    .relay_via_ice_get=cb_relay_ice_get,.relay_via_ice_set=cb_relay_ice_set
 };
 const RecompLauncherCNetplayCallbacks *nes_launcher_netplay_callbacks(const char*g,const char*v){snprintf(s_game,sizeof(s_game),"%s",g&&*g?g:"NES Game");snprintf(s_version,sizeof(s_version),"%s",v&&*v?v:"dev");nes_lobby_set_game_identity(s_game,s_version);nes_lobby_set_display_name(g_nes_config.netplay_player_name[0]?g_nes_config.netplay_player_name:"Player");return &s_callbacks;}
 void nes_launcher_netplay_seed_settings(RecompLauncherCSettings*s){if(!s)return;snprintf(s->netplay_player_name,sizeof(s->netplay_player_name),"%s",g_nes_config.netplay_player_name[0]?g_nes_config.netplay_player_name:"Player");}

@@ -26,8 +26,15 @@ int  nes_lobby_list_get(int index, NesLobbyRow *out) { (void)index; (void)out; r
 void nes_lobby_set_game_identity(const char *a, const char *b) { (void)a; (void)b; }
 const char *nes_lobby_game_version(void) { return NES_GAME_VERSION; }
 int  nes_lobby_create(const char *a, const char *b, const char *c, const char *d,
-                       const char *e, const NesLobbyMatchCaps *f)
-{ (void)a; (void)b; (void)c; (void)d; (void)e; (void)f; return -1; }
+                       const char *e, const NesLobbyMatchCaps *f, int g)
+{ (void)a; (void)b; (void)c; (void)d; (void)e; (void)f; (void)g; return -1; }
+int  nes_lobby_relay_host_get(void) { return 0; }
+void nes_lobby_relay_host_set(int on) { (void)on; }
+int  nes_lobby_relay_via_ice_get(void) { return 0; }
+void nes_lobby_relay_via_ice_set(int on) { (void)on; }
+int  nes_lobby_max_slots(void) { return 0; }
+const char *nes_lobby_last_error(void) { return ""; }
+void nes_lobby_clear_last_error(void) {}
 int  nes_lobby_join(const char *a, const char *b, const char *c)
 { (void)a; (void)b; (void)c; return -1; }
 int  nes_lobby_leave(void) { return -1; }
@@ -227,13 +234,15 @@ static void caps_from_shared(const RNetLobbyMatchCaps *r, NesLobbyMatchCaps *o)
 
 int nes_lobby_create(const char *name, const char *game_name, const char *game_version,
                      const char *password, const char *host_bind,
-                     const NesLobbyMatchCaps *caps)
+                     const NesLobbyMatchCaps *caps, int max_slots)
 {
     RNetLobbyMatchCaps rc;
+    int cap = nes_net_seat_cap();
     nes_lobby_init();
+    if (max_slots < 2 || max_slots > cap) max_slots = cap;
     if (caps && caps->valid) caps_to_shared(caps, &rc);
     return rnet_lobby_create(name, game_name, game_version, password, host_bind,
-                             caps && caps->valid ? &rc : NULL, nes_net_seat_cap());
+                             caps && caps->valid ? &rc : NULL, max_slots);
 }
 int nes_lobby_join(const char *id, const char *pw, const char *bind)
 {
@@ -241,6 +250,21 @@ int nes_lobby_join(const char *id, const char *pw, const char *bind)
     return rnet_lobby_join(id, pw, bind);
 }
 int nes_lobby_leave(void) { return rnet_lobby_leave(); }
+int  nes_lobby_relay_host_get(void) { nes_lobby_init(); return rnet_lobby_relay_host_pref(); }
+void nes_lobby_relay_host_set(int on) { nes_lobby_init(); rnet_lobby_set_relay_host_pref(on != 0); }
+int  nes_lobby_relay_via_ice_get(void) { nes_lobby_init(); return rnet_lobby_relay_via_ice() && rnet_host_ice_available(); }
+void nes_lobby_relay_via_ice_set(int on) { nes_lobby_init(); rnet_lobby_set_relay_via_ice(on != 0); }
+int  nes_lobby_max_slots(void)
+{
+    const RNetLobbyJoinInfo *j = rnet_lobby_join_info();
+    return j && rnet_lobby_in_lobby() ? j->max_slots : 0;
+}
+const char *nes_lobby_last_error(void)
+{
+    const RNetLobbyJoinInfo *j = rnet_lobby_join_info();
+    return j ? j->last_error : "";
+}
+void nes_lobby_clear_last_error(void) { rnet_lobby_clear_last_error(); }
 int nes_lobby_in_lobby(void) { return rnet_lobby_in_lobby(); }
 int nes_lobby_is_host(void) { return rnet_lobby_is_host(); }
 

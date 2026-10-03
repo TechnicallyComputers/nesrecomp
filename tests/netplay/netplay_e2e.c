@@ -239,6 +239,17 @@ static void ldiag(int me)
     while (!(cond)) { ldiag(me); if (rnet_os_monotonic_ms() > u_) { fprintf(stderr, "seat %d: timeout: %s (err=%s)\n", me, what, \
         nes_lobby_join_info()->last_error); return 1; } nes_lobby_pump(); rnet_os_sleep_micros(3000); } } while (0)
 
+/*
+ * Timing note (measured, NES_E2E_DEBUG=1 + NES_E2E_SERVER_LOG): with N >= 3
+ * this test spends ~45 s of its ~47 s in "all ready" / Play, answered by the
+ * server with "host_relay_unproven". Every ICE pair is COMPLETED ~1 s after
+ * each join, and each guest sends path_report "direct" once. But the server
+ * clears EVERY seat's path proof when a later guest joins (ws_lobby
+ * clear_lobby_ice_paths), and recomp-net's guest only re-reports on its
+ * HI_REPORT_REFRESH_MS (45 s) timer, so the earlier guests' proofs are missing
+ * until that fires. It is not an ICE failure and not the 20 s HI_FAIL_RETRY_MS
+ * (no negotiation fails here). The test's waits (60 s launch) are sized for it.
+ */
 static int child_lobby(int me, int n, const char *url)
 {
     NesLobbyMatchCaps caps;
@@ -253,7 +264,7 @@ static int child_lobby(int me, int n, const char *url)
     memset(&caps, 0, sizeof(caps));
     caps.valid = 1; caps.input_delay = 2; caps.widescreen = 1; caps.widescreen_hud = 1; caps.ws_extra = 7;
     if (me == 0) {
-        if (nes_lobby_create("e2e room", "NES Netplay E2E", "e2e-1", "", "127.0.0.1:0", &caps) != 0) return 1;
+        if (nes_lobby_create("e2e room", "NES Netplay E2E", "e2e-1", "", "127.0.0.1:0", &caps, n) != 0) return 1;
         LWAIT(nes_lobby_in_lobby() && nes_lobby_is_host(), 8000, "created");
         LWAIT(nes_lobby_member_count() >= n, 30000, "guests seated");
         nes_lobby_set_ready(1);

@@ -143,3 +143,13 @@ environment, N-process ICE hub adoption over real libjuice agents (loopback; the
 waiting-room signalling is a socketpair), and, with a server binary, the whole
 production path against a real lobby server on loopback. Builds whose ceiling is
 below N must refuse N seats; that is asserted, not skipped.
+
+Timing: the 3- and 4-seat `lobby_*` tests take ~47 s (2 seats: ~3 s). That is
+measured, not flakiness: the lobby server clears every seat's `path_report`
+proof whenever membership changes, and a guest seated before the last joiner
+only re-sends its report on recomp-net's 45 s refresh (`HI_REPORT_REFRESH_MS`,
+host_ice), so the server answers `host_relay_unproven` to Play until then. All
+ICE agents connect within ~1 s. The fix belongs in recomp-net (re-report when
+the guest's own lobby row shows no fresh proof) and is NOT in the current pin:
+`tests/netplay/recomp-net-proof-rereport.patch` (apply inside lib/recomp-net)
+was verified to bring these tests to ~3-4 s.

@@ -1,4 +1,8 @@
 # Optional recomp-net delay-synchronised netcode for NESRecomp games.
+#
+# The lobby is recomp-net's shared rnet_lobby_* client (librecomp_net), reached
+# through the thin nes_lobby_* adapter; there is no engine-local WebSocket or
+# lobby protocol code any more.
 
 if(NOT NESRECOMP_RECOMP_NET_ROOT)
     get_filename_component(NESRECOMP_RECOMP_NET_ROOT
@@ -41,13 +45,10 @@ function(nesrecomp_enable_recomp_net target)
     target_sources(${target} PRIVATE
         "${NESRECOMP_RUNNER_ROOT}/src/netplay/nes_netplay.c"
         "${NESRECOMP_RUNNER_ROOT}/src/netplay/nes_launcher_netplay.c"
-        "${NESRECOMP_RUNNER_ROOT}/src/lobby/nes_lobby_client.c"
-        "${NESRECOMP_RUNNER_ROOT}/src/lobby/ws/rnet_ws.c"
-        "${NESRECOMP_RUNNER_ROOT}/src/lobby/ws/rnet_sha1.c")
+        "${NESRECOMP_RUNNER_ROOT}/src/lobby/nes_lobby_client.c")
     target_include_directories(${target} PRIVATE
         "${NESRECOMP_RUNNER_ROOT}/src/netplay"
-        "${NESRECOMP_RUNNER_ROOT}/src/lobby"
-        "${NESRECOMP_RUNNER_ROOT}/src/lobby/ws")
+        "${NESRECOMP_RUNNER_ROOT}/src/lobby")
     target_link_libraries(${target} PRIVATE recomp_net)
     target_compile_definitions(${target} PRIVATE NESRECOMP_NET=1 NES_HAS_LOBBY_CLIENT=1)
     if(WIN32)
@@ -60,14 +61,11 @@ if(NESRECOMP_ENABLE_NET)
     list(APPEND NESRECOMP_RUNNER_SOURCES
         "${NESRECOMP_RUNNER_ROOT}/src/netplay/nes_netplay.c"
         "${NESRECOMP_RUNNER_ROOT}/src/netplay/nes_launcher_netplay.c"
-        "${NESRECOMP_RUNNER_ROOT}/src/lobby/nes_lobby_client.c"
-        "${NESRECOMP_RUNNER_ROOT}/src/lobby/ws/rnet_ws.c"
-        "${NESRECOMP_RUNNER_ROOT}/src/lobby/ws/rnet_sha1.c")
+        "${NESRECOMP_RUNNER_ROOT}/src/lobby/nes_lobby_client.c")
     list(APPEND NESRECOMP_RUNNER_LIBRARIES recomp_net)
     list(APPEND NESRECOMP_RUNNER_INCLUDE_DIRS
         "${NESRECOMP_RUNNER_ROOT}/src/netplay"
-        "${NESRECOMP_RUNNER_ROOT}/src/lobby"
-        "${NESRECOMP_RUNNER_ROOT}/src/lobby/ws")
+        "${NESRECOMP_RUNNER_ROOT}/src/lobby")
     add_compile_definitions(NESRECOMP_NET=1 NES_HAS_LOBBY_CLIENT=1)
     if(WIN32)
         list(APPEND NESRECOMP_RUNNER_LIBRARIES ws2_32)

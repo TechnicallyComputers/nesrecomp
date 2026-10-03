@@ -13,7 +13,10 @@ extern "C" {
 #define NES_LOBBY_VERSION_LEN 32
 #define NES_LOBBY_ENDPOINT_LEN 64
 #define NES_LOBBY_MAX_LIST 32
-#define NES_LOBBY_MAX_MEMBERS 4
+/* Player-seat ceiling the lobby array can hold. The ACTIVE ceiling is
+ * nes_netplay_max_seats() (what this build's runtime can drive); the lobby is
+ * configured with it and create() clamps to it. */
+#define NES_LOBBY_MAX_MEMBERS 8
 
 #ifndef NES_GAME_VERSION
 #define NES_GAME_VERSION "dev"
@@ -60,13 +63,26 @@ typedef struct NesLobbyJoinInfo {
     char     peer_hostport[NES_LOBBY_ENDPOINT_LEN];
     int      player_count;
     int      max_slots;
-    char     last_error[64]; /* need_password | bad_password | â€¦ */
+    /* How this launch carries the match (mirrors RNetLobbyJoinInfo; test
+     * transport_ice_hub first -- transport_host is also 1 in that case). */
+    int      transport_host;     /* host port advertised, guests dial it */
+    int      transport_ice_hub;  /* host relay over the waiting room's ICE agents */
+    int      force_input_relay;  /* lobby server's UDP relay, dial peer_hostport */
+    int      host_spectates;     /* unsupported by NES: the launch is refused */
+    int      local_is_spectator; /* unsupported by NES */
+    char     last_error[64]; /* need_password | bad_password | ice_not_connected | ... */
 } NesLobbyJoinInfo;
 
-/* Default URL when NES_NET_LOBBY_URL unset:
- * ws://netplay.technicallycomputers.ca:8765 */
+/* This is a thin adapter over recomp-net's shared rnet_lobby_* client
+ * (lib/recomp-net). Environment: RNET_LOBBY_URL, or the historic
+ * NES_NET_LOBBY_URL / NES_NET_GAME_VERSION spellings.
+ * Default URL (neither set): ws://netplay.technicallycomputers.ca:8765, kept from
+ * the pre-adapter client; the shared library's own default is not substituted. */
 const char *nes_lobby_default_url(void);
 
+/* Configure the shared client for this build (game identity, seat ceiling,
+ * caps codec). Idempotent; called implicitly by every entry point below. */
+void nes_lobby_init(void);
 int  nes_lobby_connect(const char *ws_url); /* 0 ok */
 void nes_lobby_disconnect(void);
 int  nes_lobby_connected(void);
@@ -74,6 +90,8 @@ int  nes_lobby_connected(void);
 void nes_lobby_set_display_name(const char *name);
 const char *nes_lobby_display_name(void);
 const char *nes_lobby_player_id(void);
+/* Lobby host's player id (stable across seat swaps); "" if unknown. */
+const char *nes_lobby_host_player_id(void);
 
 /* Non-blocking pump â€” call every frame from the launcher. */
 void nes_lobby_pump(void);
@@ -107,6 +125,9 @@ int  nes_lobby_in_lobby(void);
 int  nes_lobby_is_host(void);
 /* Filled after create/join/lobby_update; peer endpoints for PsxNetplayConfig. */
 const NesLobbyJoinInfo *nes_lobby_join_info(void);
+/* After op:launch: fill *out when the launch is usable (and, for the ICE hub,
+ * every seat connected). Does not clear launch_pending. Returns 1 if filled. */
+int  nes_lobby_try_fill_launch(NesLobbyJoinInfo *out);
 
 /* Latest host match_caps (valid==0 until create/join/launch delivers one). */
 const NesLobbyMatchCaps *nes_lobby_match_caps(void);

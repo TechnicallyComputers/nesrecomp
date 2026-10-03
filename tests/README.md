@@ -33,6 +33,19 @@ C:\msys64\mingw64\bin\cmake.exe --build F:\Projects\nesrecomp\build\mapper-tests
 C:\msys64\mingw64\bin\ctest.exe --test-dir F:\Projects\nesrecomp\build\mapper-tests -C Release --output-on-failure
 ```
 
+## Netplay (recomp-net) tests
+
+`tests/netplay` is a standalone project built through `runner/recomp_net.cmake`
+(`-DNESRECOMP_ENABLE_NET=ON -DNESRECOMP_NET_ICE=ON`). See `docs/RECOMP_NET.md`
+("Tests") for the seat-ceiling, LAN, ICE-hub and real-lobby-server cases:
+
+```sh
+git submodule update --init lib/recomp-net
+cmake -S tests/netplay -B build/netplay-tests -DRNET_LIBJUICE_ROOT=<libjuice sources>
+cmake --build build/netplay-tests -j
+ctest --test-dir build/netplay-tests --output-on-failure
+```
+
 ## Render/audio focused self-tests
 
 The render/audio tests cover the APU timer-period cache, rejected partial APU

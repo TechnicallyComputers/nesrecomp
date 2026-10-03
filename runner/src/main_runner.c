@@ -1068,8 +1068,13 @@ smoke_skip_input:
         }
         if (nes_netplay_state_desync(&tick, &a, &b))
             netplay_return_to_lobby("deterministic state mismatch");
+        /* Published bytes are indexed by emulated controller PORT; ports 3/4
+         * are the title's logical seats (NESRECOMP_INPUT_SEATS). The seat
+         * ceiling is enforced in nes_netplay_start, never exceeded here. */
         g_controller1_buttons = nes_netplay_published_buttons(0);
         g_controller2_buttons = nes_netplay_published_buttons(1);
+        for (int p = 2; p < NESRECOMP_INPUT_SEATS; ++p)
+            g_logical_input[p] = nes_netplay_published_buttons(p);
     }
 #endif
 
@@ -1861,7 +1866,9 @@ int nesrecomp_runner_run(int argc, char *argv[]) {
         }
 #endif
         if (net.enabled && nes_netplay_start(&net) != 0) {
-            fprintf(stderr, "[Netplay] Could not start the requested session.\n");
+            fprintf(stderr, "[Netplay] Could not start the requested session%s%s.\n",
+                    nes_netplay_last_error()[0] ? ": " : "", nes_netplay_last_error());
+            nes_netplay_discard_handover();
             return 1;
         }
     }
